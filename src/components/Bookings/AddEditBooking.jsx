@@ -83,14 +83,45 @@ const AdminEditBookingPage = () => {
     return locationDetails?.pricing || {};
   }, [activeOffer, locationDetails]);
 
-  const getFoodPackages = useCallback(() => {
-    if (activeOffer && activeOffer.locationPricing?.foodPackages) {
-      return activeOffer.locationPricing.foodPackages.filter(
-        pkg => pkg.locationId === locationDetails?._id
-      );
-    }
-    return locationDetails?.pricing?.foodPackages || [];
-  }, [activeOffer, locationDetails]);
+  // Add this helper function at the top of your component (outside the return statement)
+const getLocationIdFromPackage = (pkg) => {
+  if (!pkg.locationId) return null;
+  if (typeof pkg.locationId === 'string') return pkg.locationId;
+  if (pkg.locationId.$oid) return pkg.locationId.$oid;
+  if (pkg.locationId._id) return String(pkg.locationId._id);
+  return String(pkg.locationId);
+};
+
+// Update your existing getFoodPackages function
+const getFoodPackages = useCallback(() => {
+  // Get packages from active offer if available
+  if (activeOffer && activeOffer.locationPricing?.foodPackages) {
+    const currentLocationId = String(locationDetails?._id);
+    
+    // Filter packages:
+    // 1. Must belong to current location
+    // 2. Must be custom packages (foodPackageId starts with 'custom-')
+    return activeOffer.locationPricing.foodPackages.filter(pkg => {
+      const pkgLocId = getLocationIdFromPackage(pkg);
+      const belongsToCurrentLocation = pkgLocId === currentLocationId;
+      
+      // Check if it's a custom package
+      const isCustomPackage = pkg.foodPackageId && 
+                             typeof pkg.foodPackageId === 'string' && 
+                             pkg.foodPackageId.startsWith('custom-');
+      
+      return belongsToCurrentLocation && isCustomPackage;
+    });
+  }
+  
+  // No active offer – fall back to location's original packages
+  // Filter by current location
+  const currentLocationId = String(locationDetails?._id);
+  return (locationDetails?.pricing?.foodPackages || []).filter(pkg => {
+    const pkgLocId = getLocationIdFromPackage(pkg);
+    return pkgLocId === currentLocationId;
+  });
+}, [activeOffer, locationDetails]);
 
   const calculateFoodPrice = useCallback(() => {
     if (!selectedFoodPackage) return 0;
@@ -680,117 +711,159 @@ const AdminEditBookingPage = () => {
               </section>
 
               {/* Food Packages */}
-              {getFoodPackages().length > 0 && (
-                <section className="bg-white border border-gray-200 rounded-xl p-5">
-                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                    <Utensils className="w-5 h-5 text-blue-600" /> Food Packages
-                    {activeOffer && <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full ml-2">Special offer</span>}
-                  </h3>
-                  <div className="space-y-3">
-                    <label className="flex items-start gap-3 p-4 bg-gray-50 rounded-lg border border-gray-200 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="foodOption"
-                        checked={!selectedFoodPackage}
-                        onChange={() => {
-                          setSelectedFoodPackage(null);
-                          setDailyFoodSelections({});
-                          setShowDailySelection(false);
-                        }}
-                        className="mt-1 w-4 h-4 text-blue-600"
-                      />
-                      <div>
-                        <p className="font-medium text-gray-900">No food required</p>
-                      </div>
-                    </label>
-                    {getFoodPackages().map(pkg => {
-                      const pkgId = pkg.foodPackageId || pkg._id;
-                      return (
-                        <label key={pkgId} className="flex items-start gap-3 p-4 bg-white rounded-lg border border-gray-200 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="foodOption"
-                            checked={selectedFoodPackage?.id === pkgId}
-                            onChange={() => setSelectedFoodPackage({
-                              id: pkgId,
-                              name: pkg.name,
-                              pricePerAdult: pkg.pricePerAdult,
-                              pricePerKid: pkg.pricePerKid,
-                              description: pkg.description,
-                            })}
-                            className="mt-1 w-4 h-4 text-blue-600"
-                          />
-                          <div className="flex-1">
-                            <div className="flex justify-between">
-                              <div>
-                                <p className="font-semibold text-gray-900">{pkg.name}</p>
-                                <p className="text-sm text-gray-600 mt-1">{pkg.description}</p>
-                                {activeOffer && pkg.foodPackageId && (
-                                  <span className="text-xs text-green-600 font-medium">Special offer price</span>
-                                )}
-                              </div>
-                              <div className="text-right">
-                                <p className="font-semibold">₹{pkg.pricePerAdult} <span className="text-sm font-normal">/adult</span></p>
-                                <p className="text-sm text-gray-600">₹{pkg.pricePerKid} /kid</p>
-                              </div>
-                            </div>
-                            {selectedFoodPackage?.id === pkgId && checkInDate && checkOutDate && !sameDayCheckout && (
-                              <div className="mt-4 pt-3 border-t border-gray-200">
-                                <button
-                                  type="button"
-                                  onClick={() => setShowDailySelection(!showDailySelection)}
-                                  className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
-                                >
-                                  {showDailySelection ? 'Hide' : 'Customize'} daily selections
-                                  <ChevronDown size={16} className={`transition-transform ${showDailySelection ? 'rotate-180' : ''}`} />
-                                </button>
-                                {showDailySelection && (
-                                  <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
-                                    {(() => {
-                                      const start = new Date(utcDate(checkInDate));
-                                      const foodDays = days + 1;
-                                      const daysArray = [];
-                                      for (let i = 0; i < foodDays; i++) {
-                                        const d = new Date(start);
-                                        d.setUTCDate(d.getUTCDate() + i);
-                                        const y = d.getUTCFullYear();
-                                        const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-                                        const day = String(d.getUTCDate()).padStart(2, '0');
-                                        daysArray.push({
-                                          date: d,
-                                          dateKey: `${y}-${m}-${day}`,
-                                        });
-                                      }
-                                      return daysArray.map(day => (
-                                        <div key={day.dateKey} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                                          <span className="text-sm font-medium">
-                                            {day.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}
-                                          </span>
-                                          <select
-                                            value={dailyFoodSelections[day.dateKey] || ''}
-                                            onChange={e => setDailyFoodSelections(prev => ({ ...prev, [day.dateKey]: e.target.value }))}
-                                            className="text-sm border border-gray-300 rounded px-2 py-1"
-                                          >
-                                            <option value="">No food</option>
-                                            {getFoodPackages().map(p => {
-                                              const pid = p.foodPackageId || p._id;
-                                              return <option key={pid} value={pid}>{p.name}</option>;
-                                            })}
-                                          </select>
-                                        </div>
-                                      ));
-                                    })()}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </label>
-                      );
-                    })}
+             {/* Food Packages */}
+{getFoodPackages().length > 0 && (
+  <section className="bg-white border border-gray-200 rounded-xl p-5">
+    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+      <Utensils className="w-5 h-5 text-blue-600" /> Food Packages
+      {activeOffer && <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full ml-2">Special offer</span>}
+    </h3>
+    <div className="space-y-3">
+      <label className="flex items-start gap-3 p-4 bg-gray-50 rounded-lg border border-gray-200 cursor-pointer">
+        <input
+          type="radio"
+          name="foodOption"
+          checked={!selectedFoodPackage}
+          onChange={() => {
+            setSelectedFoodPackage(null);
+            setDailyFoodSelections({});
+            setShowDailySelection(false);
+          }}
+          className="mt-1 w-4 h-4 text-blue-600"
+        />
+        <div>
+          <p className="font-medium text-gray-900">No food required</p>
+        </div>
+      </label>
+      
+      {/* Helper function to get location ID from package */}
+      {(() => {
+        const getLocationIdFromPackage = (pkg) => {
+          if (!pkg.locationId) return null;
+          if (typeof pkg.locationId === 'string') return pkg.locationId;
+          if (pkg.locationId.$oid) return pkg.locationId.$oid;
+          if (pkg.locationId._id) return String(pkg.locationId._id);
+          return String(pkg.locationId);
+        };
+
+        // Filter packages based on location and custom packages
+        const filteredPackages = getFoodPackages().filter(pkg => {
+          // If there's an active offer, only show custom packages
+          if (activeOffer) {
+            // Check if it's a custom package (ID starts with 'custom-')
+            const isCustomPackage = pkg.foodPackageId && 
+                                   typeof pkg.foodPackageId === 'string' && 
+                                   pkg.foodPackageId.startsWith('custom-');
+            
+            // Check if it belongs to current location
+            const pkgLocId = getLocationIdFromPackage(pkg);
+            const currentLocationId = String(locationDetails?._id);
+            
+            return isCustomPackage && pkgLocId === currentLocationId;
+          }
+          
+          // No active offer - show all packages for this location
+          const pkgLocId = getLocationIdFromPackage(pkg);
+          const currentLocationId = String(locationDetails?._id);
+          return pkgLocId === currentLocationId;
+        });
+
+        return filteredPackages.map(pkg => {
+          const pkgId = pkg.foodPackageId || pkg._id;
+          const isCustomPackage = pkg.foodPackageId && 
+                                 typeof pkg.foodPackageId === 'string' && 
+                                 pkg.foodPackageId.startsWith('custom-');
+          
+          return (
+            <label key={pkgId} className="flex items-start gap-3 p-4 bg-white rounded-lg border border-gray-200 cursor-pointer">
+              <input
+                type="radio"
+                name="foodOption"
+                checked={selectedFoodPackage?.id === pkgId}
+                onChange={() => setSelectedFoodPackage({
+                  id: pkgId,
+                  name: pkg.name,
+                  pricePerAdult: pkg.pricePerAdult,
+                  pricePerKid: pkg.pricePerKid,
+                  description: pkg.description,
+                })}
+                className="mt-1 w-4 h-4 text-blue-600"
+              />
+              <div className="flex-1">
+                <div className="flex justify-between">
+                  <div>
+                    <p className="font-semibold text-gray-900">{pkg.name}</p>
+                    <p className="text-sm text-gray-600 mt-1">{pkg.description}</p>
+                    {activeOffer && isCustomPackage && (
+                      <span className="text-xs text-green-600 font-medium">Special offer price</span>
+                    )}
+                    {isCustomPackage && !activeOffer && (
+                      <span className="text-xs text-yellow-600 font-medium">Custom package</span>
+                    )}
                   </div>
-                </section>
-              )}
+                  <div className="text-right">
+                    <p className="font-semibold">₹{pkg.pricePerAdult} <span className="text-sm font-normal">/adult</span></p>
+                    <p className="text-sm text-gray-600">₹{pkg.pricePerKid} /kid</p>
+                  </div>
+                </div>
+                {selectedFoodPackage?.id === pkgId && checkInDate && checkOutDate && !sameDayCheckout && (
+                  <div className="mt-4 pt-3 border-t border-gray-200">
+                    <button
+                      type="button"
+                      onClick={() => setShowDailySelection(!showDailySelection)}
+                      className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+                    >
+                      {showDailySelection ? 'Hide' : 'Customize'} daily selections
+                      <ChevronDown size={16} className={`transition-transform ${showDailySelection ? 'rotate-180' : ''}`} />
+                    </button>
+                    {showDailySelection && (
+                      <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
+                        {(() => {
+                          const start = new Date(utcDate(checkInDate));
+                          const foodDays = days + 1;
+                          const daysArray = [];
+                          for (let i = 0; i < foodDays; i++) {
+                            const d = new Date(start);
+                            d.setUTCDate(d.getUTCDate() + i);
+                            const y = d.getUTCFullYear();
+                            const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+                            const day = String(d.getUTCDate()).padStart(2, '0');
+                            daysArray.push({
+                              date: d,
+                              dateKey: `${y}-${m}-${day}`,
+                            });
+                          }
+                          return daysArray.map(day => (
+                            <div key={day.dateKey} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                              <span className="text-sm font-medium">
+                                {day.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}
+                              </span>
+                              <select
+                                value={dailyFoodSelections[day.dateKey] || ''}
+                                onChange={e => setDailyFoodSelections(prev => ({ ...prev, [day.dateKey]: e.target.value }))}
+                                className="text-sm border border-gray-300 rounded px-2 py-1"
+                              >
+                                <option value="">No food</option>
+                                {filteredPackages.map(p => {
+                                  const pid = p.foodPackageId || p._id;
+                                  return <option key={pid} value={pid}>{p.name}</option>;
+                                })}
+                              </select>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </label>
+          );
+        });
+      })()}
+    </div>
+  </section>
+)}
 
               {/* Payment section */}
               <section className="bg-white border border-gray-200 rounded-xl p-5">
