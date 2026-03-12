@@ -390,6 +390,7 @@ export default function GetOffers() {
 
                     {/* Food Packages */}
                     {/* Food Packages */}
+{/* Food Packages */}
 {(offer.locationPricing?.foodPackages?.length > 0 ||
   offer.poolPartyPricing?.foodPackages?.length > 0) && (
   <div className="mb-6">
@@ -401,7 +402,9 @@ export default function GetOffers() {
       {/* LOCATION FOOD PACKAGES */}
       {offer.offerType === "location" && 
        offer.locationPricing?.foodPackages?.length > 0 && 
-       offer.locationPricing.foodPackages.map((pkg, idx) => (
+       offer.locationPricing.foodPackages
+         .filter(pkg => pkg.foodPackageId?.startsWith('custom'))
+         .map((pkg, idx) => (
         <div
           key={idx}
           className="bg-white p-4 rounded-lg border border-gray-200"
@@ -416,6 +419,14 @@ export default function GetOffers() {
               </span>
             )}
           </div>
+          
+          {/* Description */}
+          {pkg.description && (
+            <p className="text-xs text-gray-500 mb-2 italic">
+              {pkg.description}
+            </p>
+          )}
+          
           <div className="text-xs text-gray-600 space-y-1">
             <p>
               Adult:{" "}
@@ -430,13 +441,20 @@ export default function GetOffers() {
               </span>
             </p>
           </div>
+          
+          {/* Custom badge */}
+          <span className="inline-block mt-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">
+            Custom Package
+          </span>
         </div>
       ))}
 
       {/* POOL PARTY FOOD PACKAGES */}
       {offer.offerType === "poolparty" && 
        offer.poolPartyPricing?.foodPackages?.length > 0 && 
-       offer.poolPartyPricing.foodPackages.map((pkg, idx) => (
+       offer.poolPartyPricing.foodPackages
+         .filter(pkg => pkg.foodPackageId?.startsWith('custom'))
+         .map((pkg, idx) => (
         <div
           key={idx}
           className="bg-white p-4 rounded-lg border border-gray-200"
@@ -451,6 +469,14 @@ export default function GetOffers() {
               </span>
             )}
           </div>
+          
+          {/* Description */}
+          {pkg.description && (
+            <p className="text-xs text-gray-500 mb-2 italic">
+              {pkg.description}
+            </p>
+          )}
+          
           <div className="text-xs text-gray-600 space-y-1">
             <p>
               Adult:{" "}
@@ -465,8 +491,30 @@ export default function GetOffers() {
               </span>
             </p>
           </div>
+          
+          {/* Custom badge */}
+          <span className="inline-block mt-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">
+            Custom Package
+          </span>
         </div>
       ))}
+      
+      {/* Show message if no custom packages */}
+      {offer.offerType === "location" && 
+       offer.locationPricing?.foodPackages?.length > 0 && 
+       offer.locationPricing.foodPackages.filter(pkg => pkg.foodPackageId?.startsWith('custom')).length === 0 && (
+        <p className="text-gray-500 text-sm col-span-full text-center py-4">
+          No custom food packages found for this offer
+        </p>
+      )}
+      
+      {offer.offerType === "poolparty" && 
+       offer.poolPartyPricing?.foodPackages?.length > 0 && 
+       offer.poolPartyPricing.foodPackages.filter(pkg => pkg.foodPackageId?.startsWith('custom')).length === 0 && (
+        <p className="text-gray-500 text-sm col-span-full text-center py-4">
+          No custom food packages found for this offer
+        </p>
+      )}
       
     </div>
   </div>
