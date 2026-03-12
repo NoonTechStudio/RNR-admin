@@ -1,5 +1,5 @@
-// AdminEditPoolPartyBookingPage.jsx – Fixed food package selection
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+// AdminEditPoolPartyBookingPage.jsx – Fixed food package selection + deferred selection
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -63,6 +63,14 @@ const AdminEditPoolPartyBookingPage = () => {
   const [updateResult, setUpdateResult] = useState(null);
   const [step, setStep] = useState('booking'); // 'booking' | 'confirmation'
 
+  // ---------- Refs & extra state ----------
+  // Track the last selected foodPackageId (stable across list changes)
+  const lastSelectedFoodPackageId = useRef(null);
+  // Prevent initial selection from overriding user choice after first run
+  const initialSelectionDone = useRef(false);
+  // Desired food package ID to select when it becomes available (e.g., from offer)
+  const [desiredFoodPackageId, setDesiredFoodPackageId] = useState(null);
+
   // ---------- Derived values ----------
   const totalGuests = formData.adults + formData.kids;
 
@@ -93,7 +101,8 @@ const AdminEditPoolPartyBookingPage = () => {
     return originalSession?.pricing || { perAdult: 0, perKid: 0 };
   }, [activeOffer, poolPartyData, sessionsAvailability]);
 
-  const getFoodPackages = useCallback(() => {
+  // Memoized food packages – replaces getFoodPackages function
+  const foodPackages = useMemo(() => {
     if (activeOffer && activeOffer.poolPartyPricing?.foodPackages) {
       return activeOffer.poolPartyPricing.foodPackages.filter(
         fp => fp.poolPartyId === poolPartyData?._id
@@ -101,8 +110,6 @@ const AdminEditPoolPartyBookingPage = () => {
     }
     return poolPartyData?.selectedFoodPackages || [];
   }, [activeOffer, poolPartyData]);
-
-  const foodPackages = getFoodPackages();
 
   // Price calculations – use the package's unique _id for selection
   const calculateTotalPrice = useCallback(() => {
@@ -177,8 +184,7 @@ const AdminEditPoolPartyBookingPage = () => {
           }
         }
 
-        // Populate form – determine the initially selected food package by its unique _id
-        // We'll set this after poolPartyData is loaded (in a separate effect)
+        // Populate form – basic fields (foodPackage set later)
         setFormData(prev => ({
           ...prev,
           name: b.guestName || '',
@@ -209,21 +215,80 @@ const AdminEditPoolPartyBookingPage = () => {
   // --------------------------------------------------------------------
   // After poolPartyData is loaded, set the initial foodPackage value using the unique _id
   useEffect(() => {
-    if (poolPartyData && booking) {
-      const storedFoodId = booking.foodPackage?.foodPackageId || booking.foodPackage?._id || '';
-      // Try to find a package that matches by _id first, then by foodPackageId
+    if (!poolPartyData || !booking) return;
+    if (initialSelectionDone.current) return;
+
+    const storedFoodId = booking.foodPackage?.foodPackageId || booking.foodPackage?._id || '';
+    // Try to find a package that matches by _id first, then by foodPackageId
+    const matchingPkg = foodPackages.find(pkg => 
+      String(pkg._id) === storedFoodId || 
+      (pkg.foodPackageId && pkg.foodPackageId === storedFoodId)
+    );
+
+    if (matchingPkg) {
+      // Found – select it immediately
+      lastSelectedFoodPackageId.current = matchingPkg.foodPackageId;
+      setFormData(prev => ({ 
+        ...prev, 
+        withFood: true,
+        foodPackage: String(matchingPkg._id) 
+      }));
+      setDesiredFoodPackageId(null);
+    } else {
+      // Not found yet – store the desired ID so we can select it later when it appears
+      setDesiredFoodPackageId(storedFoodId);
+      // Keep withFood false for now (no selection shown)
+      setFormData(prev => ({ ...prev, withFood: false, foodPackage: '' }));
+    }
+    initialSelectionDone.current = true;
+  }, [poolPartyData, booking, foodPackages]);
+
+  // --------------------------------------------------------------------
+  // Remap selection when foodPackages changes (e.g., offer loads after user choice)
+  useEffect(() => {
+    // If we have a desired package ID waiting, try to select it now
+    if (desiredFoodPackageId) {
       const matchingPkg = foodPackages.find(pkg => 
-        String(pkg._id) === storedFoodId || 
-        (pkg.foodPackageId && pkg.foodPackageId === storedFoodId)
+        String(pkg._id) === desiredFoodPackageId || 
+        (pkg.foodPackageId && pkg.foodPackageId === desiredFoodPackageId)
       );
       if (matchingPkg) {
-        setFormData(prev => ({ ...prev, foodPackage: String(matchingPkg._id) }));
-      } else {
-        // No match, default to empty (no food selected)
-        setFormData(prev => ({ ...prev, withFood: false, foodPackage: '' }));
+        lastSelectedFoodPackageId.current = matchingPkg.foodPackageId;
+        setFormData(prev => ({
+          ...prev,
+          withFood: true,
+          foodPackage: String(matchingPkg._id),
+        }));
+        setDesiredFoodPackageId(null);
+        return;
       }
     }
-  }, [poolPartyData, booking, foodPackages]);
+
+    // Otherwise, handle case where user already selected a package but its _id disappeared
+    if (!formData.withFood || !formData.foodPackage) return;
+
+    const exists = foodPackages.some(pkg => String(pkg._id) === formData.foodPackage);
+    if (exists) return;
+
+    // Not found – try to remap using the last known foodPackageId
+    if (lastSelectedFoodPackageId.current) {
+      const matchingPkg = foodPackages.find(
+        pkg => pkg.foodPackageId === lastSelectedFoodPackageId.current
+      );
+      if (matchingPkg) {
+        setFormData(prev => ({
+          ...prev,
+          foodPackage: String(matchingPkg._id),
+        }));
+        return;
+      }
+    }
+
+    // If still no match, fallback: deselect food
+    console.warn('Selected food package not found in new list, clearing selection');
+    setFormData(prev => ({ ...prev, withFood: false, foodPackage: '' }));
+    lastSelectedFoodPackageId.current = null;
+  }, [foodPackages, desiredFoodPackageId, formData.withFood, formData.foodPackage]);
 
   // Fetch session availability using locationId
   const fetchSessionsAvailability = useCallback(async (locationId, date, currentSession = null) => {
@@ -692,48 +757,77 @@ const AdminEditPoolPartyBookingPage = () => {
               </div>
             </section>
 
-            {/* Food Packages – FIXED */}
+            {/* Food Packages – FIXED with deferred selection */}
             {foodPackages.length > 0 && (
               <section className="border border-gray-200 rounded-xl p-5">
                 <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                   <Utensils className="w-5 h-5 text-blue-600" /> Food Packages
-                  {activeOffer && <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full ml-2">Special offer</span>}
+                  {activeOffer && (
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full ml-2">
+                      Special offer
+                    </span>
+                  )}
                 </h3>
                 <div className="space-y-3">
+                  {/* No food option */}
                   <label className="flex items-start gap-3 p-3 border rounded cursor-pointer hover:bg-gray-50">
                     <input
                       type="radio"
                       name="foodOption"
                       checked={!formData.withFood}
-                      onChange={() => setFormData(prev => ({ ...prev, withFood: false, foodPackage: '' }))}
+                      onChange={() => {
+                        lastSelectedFoodPackageId.current = null;
+                        setDesiredFoodPackageId(null); // clear any pending selection
+                        setFormData(prev => ({ ...prev, withFood: false, foodPackage: '' }));
+                      }}
                       className="mt-1 w-4 h-4 text-blue-600"
                     />
                     <span className="text-gray-700">No food package</span>
                   </label>
+
+                  {/* Food packages */}
                   {foodPackages.map(pkg => {
-                    // Use the unique MongoDB _id for the radio value
                     const pkgId = String(pkg._id);
+                    const isOfferPackage = pkg.foodPackageId?.startsWith('custom');
+
                     return (
-                      <label key={pkgId} className="flex items-start gap-3 p-3 border rounded cursor-pointer hover:bg-gray-50">
+                      <label
+                        key={pkgId}
+                        className="flex items-start gap-3 p-3 border rounded cursor-pointer hover:bg-gray-50"
+                      >
                         <input
                           type="radio"
                           name="foodOption"
                           value={pkgId}
                           checked={formData.withFood && formData.foodPackage === pkgId}
-                          onChange={() => setFormData(prev => ({
-                            ...prev,
-                            withFood: true,
-                            foodPackage: pkgId
-                          }))}
+                          onChange={() => {
+                            lastSelectedFoodPackageId.current = pkg.foodPackageId;
+                            setDesiredFoodPackageId(null); // clear any pending selection
+                            setFormData(prev => ({
+                              ...prev,
+                              withFood: true,
+                              foodPackage: pkgId,
+                            }));
+                          }}
                           className="mt-1 w-4 h-4 text-blue-600"
                         />
-                        <div>
+                        <div className="flex-1">
                           <p className="font-medium text-gray-900">{pkg.name}</p>
                           <p className="text-sm text-gray-600">
                             ₹{pkg.pricePerAdult} per adult, ₹{pkg.pricePerKid} per kid
                           </p>
-                          {activeOffer && pkg.foodPackageId && (
-                            <span className="text-xs text-green-600">Special offer</span>
+
+                          {/* Badge – only shown when activeOffer exists */}
+                          {activeOffer && (
+                            <span
+                              className={`inline-block text-xs px-2 py-1 rounded-full mt-1 ${
+                                isOfferPackage
+                                  ? 'bg-green-100 text-green-700'  // Offer badge
+                                  : 'bg-gray-100 text-gray-700'    // Original badge
+                              }`}
+                            >
+                              {isOfferPackage ? 'Offer' : 'Original'}
+                            </span>
                           )}
                         </div>
                       </label>
