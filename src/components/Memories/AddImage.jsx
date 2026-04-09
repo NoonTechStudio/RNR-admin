@@ -108,7 +108,7 @@ const AddImage = () => {
     }
   };
 
-  const validateField = (name, value) => {
+  const validateField = (name, value, currentImageDetails = imageDetails) => {
     const newErrors = { ...errors };
     
     switch (name) {
@@ -118,7 +118,12 @@ const AddImage = () => {
         break;
       
       case "images":
-        if ((!value || value.length === 0) && imageDetails.filter(detail => !detail.markedForDeletion).length === 0) {
+        // In edit mode, we allow 0 images if the user is explicitly deleting them.
+        // In add mode, we still require at least one.
+        const activeImages = currentImageDetails.filter(detail => !detail.markedForDeletion).length;
+        const newImagesCount = value ? value.length : 0;
+        
+        if (!isEditMode && newImagesCount === 0 && activeImages === 0) {
           newErrors.images = "Please select at least one file";
         } else {
           delete newErrors.images;
@@ -230,11 +235,12 @@ const AddImage = () => {
       };
     });
     
-    setImageDetails(prev => [...prev, ...newDetails]);
+    const updatedImageDetails = [...imageDetails, ...newDetails];
+    setImageDetails(updatedImageDetails);
     setActiveImageIndex(imageDetails.length);
 
     if (touched.images) {
-      validateField("images", validFiles);
+      validateField("images", validFiles, updatedImageDetails);
     }
 
     // Show file info
@@ -264,6 +270,12 @@ const AddImage = () => {
       const updatedDetails = [...imageDetails];
       updatedDetails[index] = { ...updatedDetails[index], markedForDeletion: true };
       setImageDetails(updatedDetails);
+      
+      // Trigger validation refresh with latest details to avoid stale state
+      if (touched.images) {
+        validateField("images", form.images, updatedDetails);
+      }
+      
       toast.success("Media marked for deletion. It will be removed from Cloudinary when you save.");
     } else {
       // For new media, remove completely
@@ -301,6 +313,12 @@ const AddImage = () => {
       setForm({ ...form, images: updatedFiles });
       setPreviews(updatedPreviews);
       setImageDetails(reorderedDetails);
+      
+      // Trigger validation refresh
+      if (touched.images) {
+        validateField("images", updatedFiles, reorderedDetails);
+      }
+      
       toast.success("Media removed");
     }
   };
@@ -309,6 +327,12 @@ const AddImage = () => {
     const updatedDetails = [...imageDetails];
     updatedDetails[index] = { ...updatedDetails[index], markedForDeletion: false };
     setImageDetails(updatedDetails);
+    
+    // Trigger validation refresh with latest details to avoid stale state
+    if (touched.images) {
+      validateField("images", form.images, updatedDetails);
+    }
+    
     toast.success("Media restored");
   };
 
@@ -343,7 +367,11 @@ const AddImage = () => {
     const newErrors = {};
     
     if (!form.locationId) newErrors.locationId = "Please select a resort location";
-    if (form.images.length === 0 && imageDetails.filter(detail => !detail.markedForDeletion).length === 0) {
+    
+    // Only enforce at least one image in create mode. 
+    // In edit mode, allow the user to delete images even if it results in 0 (the backend handles this).
+    const activeImages = imageDetails.filter(detail => !detail.markedForDeletion).length;
+    if (!isEditMode && form.images.length === 0 && activeImages === 0) {
       newErrors.images = "Please select at least one file";
     }
     
