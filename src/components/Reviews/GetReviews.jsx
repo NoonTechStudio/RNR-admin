@@ -12,8 +12,10 @@ import {
   Plus,
   Filter,
   Search,
-  Menu,
   X,
+  Camera,
+  Video,
+  Youtube
 } from "lucide-react";
 
 export default function GetReviews() {
@@ -124,7 +126,6 @@ export default function GetReviews() {
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({ ...prev, [key]: value }));
-    // Close mobile filters on change for better UX
     if (window.innerWidth < 768) {
       setShowMobileFilters(false);
     }
@@ -232,95 +233,6 @@ export default function GetReviews() {
         </button>
       </div>
 
-      {/* Filters - Mobile Overlay */}
-      {showMobileFilters && (
-        <div className="md:hidden fixed inset-0 bg-gray-900 bg-opacity-50 z-50">
-          <div className="absolute right-0 top-0 h-full w-4/5 max-w-sm bg-white shadow-xl">
-            <div className="p-4">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-lg font-semibold text-gray-800">Filters</h2>
-                <button
-                  onClick={() => setShowMobileFilters(false)}
-                  className="p-2 rounded-full hover:bg-gray-100"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-              
-              {/* Mobile Filter Content */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Search Reviews
-                  </label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                    <input
-                      type="text"
-                      placeholder="Search..."
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      value={filters.search}
-                      onChange={(e) => handleFilterChange('search', e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Filter by Resort
-                  </label>
-                  <select
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value={filters.location}
-                    onChange={(e) => handleFilterChange('location', e.target.value)}
-                  >
-                    <option value="">All Resorts</option>
-                    {locations.map((loc) => (
-                      <option key={loc._id} value={loc._id}>
-                        {loc.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Filter by Rating
-                  </label>
-                  <select
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value={filters.rating}
-                    onChange={(e) => handleFilterChange('rating', e.target.value)}
-                  >
-                    <option value="">All Ratings</option>
-                    {[5, 4, 3, 2, 1].map((rating) => (
-                      <option key={rating} value={rating}>
-                        {rating} Star{rating > 1 ? 's' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex gap-3 pt-4 border-t">
-                  <button
-                    onClick={clearFilters}
-                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
-                  >
-                    Clear
-                  </button>
-                  <button
-                    onClick={() => setShowMobileFilters(false)}
-                    className="flex-1 px-4 py-2 bg-[#008DDA] text-white rounded-lg hover:bg-[#0074b8] transition"
-                  >
-                    Apply
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Filters - Desktop */}
       <div className="hidden md:block bg-white rounded-lg shadow-sm p-4 lg:p-6 mb-6 lg:mb-8 border border-gray-200">
         <div className="flex flex-col lg:flex-row gap-4 items-end">
@@ -381,7 +293,6 @@ export default function GetReviews() {
             </div>
           </div>
 
-          {/* Clear Filters */}
           <button
             onClick={clearFilters}
             className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition flex items-center gap-2"
@@ -390,21 +301,6 @@ export default function GetReviews() {
             Clear
           </button>
         </div>
-      </div>
-
-      {/* Mobile New Review Button */}
-      <div className="md:hidden flex justify-between items-center mb-4">
-        <div>
-          <p className="text-sm text-gray-600">
-            {filteredReviews.length} review{filteredReviews.length !== 1 ? 's' : ''}
-          </p>
-        </div>
-        <button
-          onClick={() => navigate("/reviews/new")}
-          className="flex items-center gap-1 bg-[#008DDA] text-white px-3 py-2 rounded-lg shadow hover:bg-[#0074b8] transition text-sm"
-        >
-          <Plus size={16} /> New
-        </button>
       </div>
 
       {/* Reviews Count - Desktop */}
@@ -433,59 +329,83 @@ export default function GetReviews() {
           {filteredReviews.map((review) => (
             <div
               key={review._id}
-              className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-lg transition-all p-4 sm:p-6"
+              className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-lg transition-all p-4 sm:p-6 flex flex-col justify-between"
             >
-              {/* Header */}
-              <div className="flex flex-col sm:flex-row justify-between items-start mb-4 gap-2">
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-1 line-clamp-2">
-                    {review.title}
-                  </h3>
-                  <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
-                    <div className="flex items-center gap-1">
-                      <User className="w-3 h-3 sm:w-4 sm:h-4" />
-                      <span className="truncate">{review.guestName}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Calendar className="w-3 h-3 sm:w-4 sm:h-4" />
-                      <span>{formatDate(review.stayDate)}</span>
+              <div>
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row justify-between items-start mb-4 gap-2">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-1 line-clamp-2">
+                      {review.title}
+                    </h3>
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
+                      <div className="flex items-center gap-1">
+                        <User className="w-3 h-3 sm:w-4 sm:h-4" />
+                        <span className="truncate">{review.guestName}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3 sm:w-4 sm:h-4" />
+                        <span>{formatDate(review.stayDate)}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-1 bg-yellow-50 px-2 sm:px-3 py-1 rounded-full w-fit">
-                  <StarRating rating={review.rating} />
-                  <span className="text-xs sm:text-sm font-semibold text-yellow-700 ml-1">
-                    {review.rating}.0
-                  </span>
-                </div>
-              </div>
-
-              {/* Location */}
-              {review.location && (
-                <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 mb-3">
-                  <MapPin className="w-3 h-3 sm:w-4 sm:h-4" />
-                  <span className="font-medium truncate">{review.location.name}</span>
-                </div>
-              )}
-
-              {/* Review Text */}
-              <p className="text-gray-700 text-sm sm:text-base mb-4 line-clamp-3">
-                {review.reviewText}
-              </p>
-
-              {/* Recommendation */}
-              <div className="flex items-center gap-2 mb-4">
-                {review.wouldRecommend ? (
-                  <div className="flex items-center gap-2 text-green-600 bg-green-50 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm">
-                    <ThumbsUp className="w-3 h-3 sm:w-4 sm:h-4" />
-                    <span className="font-medium">Recommends</span>
+                  <div className="flex items-center gap-1 bg-yellow-50 px-2 sm:px-3 py-1 rounded-full w-fit">
+                    <StarRating rating={review.rating} />
+                    <span className="text-xs sm:text-sm font-semibold text-yellow-700 ml-1">
+                      {review.rating}.0
+                    </span>
                   </div>
-                ) : (
-                  <div className="flex items-center gap-2 text-red-600 bg-red-50 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm">
-                    <ThumbsUp className="w-3 h-3 sm:w-4 sm:h-4 rotate-180" />
-                    <span className="font-medium">Doesn't recommend</span>
+                </div>
+
+                {/* Location */}
+                {review.location && (
+                  <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 mb-3">
+                    <MapPin className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <span className="font-medium truncate">{review.location.name}</span>
                   </div>
                 )}
+
+                {/* Review Text */}
+                <p className="text-gray-700 text-sm sm:text-base mb-4 line-clamp-3">
+                  {review.reviewText}
+                </p>
+
+                {/* Media Indicators */}
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {review.images && review.images.length > 0 && (
+                    <div className="flex items-center gap-1 text-xs bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full font-medium">
+                      <Camera size={14} />
+                      <span>{review.images.length} Image{review.images.length > 1 ? 's' : ''}</span>
+                    </div>
+                  )}
+                  {review.video?.url && (
+                    <div className="flex items-center gap-1 text-xs bg-purple-50 text-purple-700 px-2.5 py-1 rounded-full font-medium">
+                      <Video size={14} />
+                      <span>Video File</span>
+                    </div>
+                  )}
+                  {review.youtubeUrl && (
+                    <div className="flex items-center gap-1 text-xs bg-red-50 text-red-700 px-2.5 py-1 rounded-full font-medium">
+                      <Youtube size={14} />
+                      <span>YouTube</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Recommendation */}
+                <div className="flex items-center gap-2 mb-4">
+                  {review.wouldRecommend ? (
+                    <div className="flex items-center gap-2 text-green-600 bg-green-50 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm">
+                      <ThumbsUp className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <span className="font-medium">Recommends</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-red-600 bg-red-50 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm">
+                      <ThumbsUp className="w-3 h-3 sm:w-4 sm:h-4 rotate-180" />
+                      <span className="font-medium">Doesn't recommend</span>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Footer */}

@@ -23,6 +23,13 @@ const AddReview = () => {
   const [loading, setLoading] = useState(false);
   const API_BASE_URL = import.meta.env.VITE_API_CONNECTION_HOST;
 
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [imageFiles, setImageFiles] = useState([]);
+  const [videoFile, setVideoFile] = useState(null);
+  const [existingImages, setExistingImages] = useState([]);
+  const [existingVideo, setExistingVideo] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+
   const isEditMode = Boolean(id);
 
   // Fetch locations on component mount
@@ -63,6 +70,9 @@ const AddReview = () => {
         stayDate: reviewData.stayDate ? new Date(reviewData.stayDate).toISOString().split('T')[0] : "",
         wouldRecommend: reviewData.wouldRecommend !== undefined ? reviewData.wouldRecommend : true
       });
+      setYoutubeUrl(reviewData.youtubeUrl || "");
+      setExistingImages(reviewData.images || []);
+      setExistingVideo(reviewData.video || null);
       toast.success("Review data loaded successfully!");
     } catch (err) {
       toast.error("Error fetching review data: " + (err.response?.data?.error || "Please try again"));
@@ -202,19 +212,41 @@ const AddReview = () => {
     }
     
     try {
-      const dataToSend = {
-        ...form
-      };
+      setSubmitting(true);
+      const formData = new FormData();
+      formData.append("location", form.location);
+      formData.append("guestName", form.guestName);
+      formData.append("email", form.email || "");
+      formData.append("rating", form.rating);
+      formData.append("title", form.title);
+      formData.append("reviewText", form.reviewText);
+      formData.append("stayDate", form.stayDate);
+      formData.append("wouldRecommend", form.wouldRecommend);
+      formData.append("youtubeUrl", youtubeUrl);
+
+      if (imageFiles && imageFiles.length > 0) {
+        for (let i = 0; i < imageFiles.length; i++) {
+          formData.append("images", imageFiles[i]);
+        }
+      }
+
+      if (videoFile) {
+        formData.append("video", videoFile);
+      }
 
       if (isEditMode) {
         // Update existing review
-        const res = await axios.put(`${API_BASE_URL}/reviews/${id}`, dataToSend);
+        const res = await axios.put(`${API_BASE_URL}/reviews/${id}`, formData, {
+          headers: { "Content-Type": "multipart/form-data" }
+        });
         toast.success("Review updated successfully!");
         console.log(res.data);
-        navigate("/reviews"); // Redirect to reviews list after update
+        navigate("/reviews");
       } else {
         // Create new review
-        const res = await axios.post(`${API_BASE_URL}/reviews`, dataToSend);
+        const res = await axios.post(`${API_BASE_URL}/reviews`, formData, {
+          headers: { "Content-Type": "multipart/form-data" }
+        });
         toast.success("Review submitted successfully!");
         console.log(res.data);
         
@@ -229,12 +261,17 @@ const AddReview = () => {
           stayDate: "",
           wouldRecommend: true
         });
+        setYoutubeUrl("");
+        setImageFiles([]);
+        setVideoFile(null);
         setErrors({});
         setTouched({});
       }
       
     } catch (err) {
       toast.error("Error: " + (err.response?.data?.error || "Failed to submit review"));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -496,27 +533,64 @@ const AddReview = () => {
                 </div>
               </section>
 
-              {/* RECOMMENDATION */}
+              {/* MEDIA ATTACHMENTS (OPTIONAL) */}
               <section className="group">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="w-1.5 h-8 bg-linear-to-b from-green-500 to-emerald-600 rounded-full"></div>
-                  <h2 className="text-xl font-bold text-gray-800">Recommendation</h2>
+                  <h2 className="text-xl font-bold text-gray-800">Media Attachments (Optional)</h2>
                 </div>
                 <div className="space-y-5">
-                  <div className="flex items-center gap-3 p-4 rounded-xl border-2 border-gray-100 bg-white/50 transform transition-all duration-200 hover:border-green-100 hover:translate-y-0.5">
-                    <input
-                      type="checkbox"
-                      name="wouldRecommend"
-                      checked={form.wouldRecommend}
-                      onChange={handleChange}
-                      className="w-5 h-5 text-green-600 rounded-lg focus:ring-green-500 border-2 border-gray-300"
-                    />
-                    <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                      <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
-                      </svg>
-                      I would recommend this resort to others
+                  {/* Upload Images */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Upload Photos (JPG, PNG, WebP)
                     </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => setImageFiles(Array.from(e.target.files))}
+                      className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 bg-white shadow-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 cursor-pointer"
+                    />
+                    {existingImages.length > 0 && (
+                      <div className="flex gap-2 mt-3 overflow-x-auto">
+                        {existingImages.map((img, index) => (
+                          <img key={index} src={img.url} alt="Review attachment" className="w-16 h-16 object-cover rounded-lg border" />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Upload Video */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Upload Video File (MP4, MOV, WebM)
+                    </label>
+                    <input
+                      type="file"
+                      accept="video/*"
+                      onChange={(e) => setVideoFile(e.target.files[0] || null)}
+                      className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 bg-white shadow-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                    />
+                    {existingVideo?.url && (
+                      <div className="mt-2 text-xs text-green-600 font-medium">
+                        ✓ Existing Video Attached
+                      </div>
+                    )}
+                  </div>
+
+                  {/* YouTube Video Link */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      YouTube Video URL
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://www.youtube.com/watch?v=..."
+                      value={youtubeUrl}
+                      onChange={(e) => setYoutubeUrl(e.target.value)}
+                      className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-green-500 bg-white shadow-sm"
+                    />
                   </div>
                 </div>
               </section>
@@ -528,10 +602,10 @@ const AddReview = () => {
             <button
               type="submit"
               className="group relative bg-linear-to-r from-green-600 to-emerald-700 text-white px-12 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 hover:from-green-700 hover:to-emerald-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-              disabled={Object.keys(errors).length > 0}
+              disabled={submitting || Object.keys(errors).length > 0}
             >
               <span className="flex items-center gap-3">
-                {isEditMode ? "Update Review" : "Submit Review"}
+                {submitting ? "Uploading & Saving..." : isEditMode ? "Update Review" : "Submit Review"}
                 <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
