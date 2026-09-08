@@ -4,8 +4,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Calendar, User, Phone, Mail, Home, Clock, Utensils, CreditCard,
-  CheckCircle, AlertCircle, Users, Loader2, ChevronDown, ArrowLeft, Shield, Download
+  CheckCircle, AlertCircle, Users, Loader2, ChevronDown, ArrowLeft, Shield, Download, Tag
 } from 'lucide-react';
+import { validateCoupon } from '../../services/couponApi';
 
 // ----------------------------------------------------------------------
 // Helper: extract YYYY‑MM‑DD from ISO string
@@ -57,6 +58,12 @@ const AdminEditBookingPage = () => {
   const [manualAmountPaid, setManualAmountPaid] = useState('');
   const [updateResult, setUpdateResult] = useState(null);
   const [step, setStep] = useState('booking'); // 'booking' | 'confirmation'
+
+  // Discount coupon
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null); // { code, discountPercent }
+  const [couponError, setCouponError] = useState('');
+  const [couponChecking, setCouponChecking] = useState(false);
 
   // ---------- Derived values (using UTC dates) ----------
   const totalGuests = adults + kids;
@@ -171,9 +178,62 @@ const getFoodPackages = useCallback(() => {
     return nightPrice + dayPrice + extraCharge + foodPrice;
   }, [checkInDate, locationDetails, getBasePricing, adults, kids, sameDayCheckout, totalGuests, days, nights, calculateFoodPrice]);
 
-  const totalPrice = useMemo(() => calculateTotalPrice(), [calculateTotalPrice]);
+  // Subtotal = price before any coupon discount
+  const subtotal = useMemo(() => calculateTotalPrice(), [calculateTotalPrice]);
+  const discountPercent = appliedCoupon?.discountPercent || 0;
+  const discountAmount = useMemo(
+    () => (discountPercent > 0 ? Math.round((subtotal * discountPercent) / 100) : 0),
+    [subtotal, discountPercent]
+  );
+  const totalPrice = useMemo(() => Math.max(0, subtotal - discountAmount), [subtotal, discountAmount]);
   const tokenAmount = useMemo(() => Math.round((totalPrice * 0.5) / 100) * 100, [totalPrice]);
   const remainingAmount = useMemo(() => Math.max(0, totalPrice - (parseFloat(manualAmountPaid) || 0)), [totalPrice, manualAmountPaid]);
+
+  // A coupon can never be combined with an active Offer
+  useEffect(() => {
+    if (activeOffer && appliedCoupon) {
+      setAppliedCoupon(null);
+      setCouponInput('');
+      setCouponError('A special offer is active for these dates — coupons cannot be combined.');
+    }
+  }, [activeOffer, appliedCoupon]);
+
+  const handleApplyCoupon = async () => {
+    const code = couponInput.trim().toUpperCase();
+    if (!code) return;
+    if (activeOffer) {
+      setCouponError('A special offer is active for these dates — coupons cannot be combined.');
+      return;
+    }
+    setCouponChecking(true);
+    setCouponError('');
+    try {
+      const res = await validateCoupon({
+        code,
+        locationId: locationDetails?._id,
+        bookingDate: checkInDate || undefined,
+        subtotal,
+      });
+      if (res.success) {
+        setAppliedCoupon({ code: res.data.code, discountPercent: res.data.discountPercent });
+        setCouponInput(res.data.code);
+      } else {
+        setAppliedCoupon(null);
+        setCouponError(res.error || 'Invalid coupon');
+      }
+    } catch (err) {
+      setAppliedCoupon(null);
+      setCouponError(err.response?.data?.error || 'Invalid coupon');
+    } finally {
+      setCouponChecking(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponInput('');
+    setCouponError('');
+  };
 
   // ✅ Only update manualAmountPaid when paymentType changes (not on totalPrice changes)
   // This preserves the existing paid amount while editing dates/guests
@@ -240,6 +300,14 @@ const getFoodPackages = useCallback(() => {
         });
         setPaymentType(b.paymentType || 'token');
         setManualAmountPaid((b.amountPaid || 0).toString());
+
+        if (b.pricing?.couponCode) {
+          setAppliedCoupon({
+            code: b.pricing.couponCode,
+            discountPercent: b.pricing.discountPercent || 0,
+          });
+          setCouponInput(b.pricing.couponCode);
+        }
 
         if (b.withFood && b.foodPackage) {
           setSelectedFoodPackage({
@@ -360,6 +428,7 @@ const getFoodPackages = useCallback(() => {
       amountPaid: parseFloat(manualAmountPaid) || 0,
       remainingAmount: Math.max(0, totalPrice - (parseFloat(manualAmountPaid) || 0)),
       sameDayCheckout,
+      couponCode: appliedCoupon?.code || '',
     };
 
     try {
@@ -456,6 +525,12 @@ const getFoodPackages = useCallback(() => {
                     </div>
                   )}
                   <div className="pt-3 border-t border-gray-200">
+                    {discountAmount > 0 && (
+                      <div className="flex justify-between text-sm text-green-600">
+                        <span>Discount ({discountPercent}% · {appliedCoupon?.code})</span>
+                        <span>-₹{discountAmount.toLocaleString()}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span className="font-semibold">Total</span>
                       <span className="font-bold text-blue-600">₹{totalPrice.toLocaleString()}</span>
@@ -865,6 +940,56 @@ const getFoodPackages = useCallback(() => {
   </section>
 )}
 
+              {/* Discount coupon */}
+              <section className="bg-white border border-gray-200 rounded-xl p-5">
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <Tag className="w-5 h-5 text-blue-600" /> Discount Coupon
+                </h3>
+                {activeOffer ? (
+                  <p className="text-sm text-gray-500">
+                    A special offer is active for these dates — coupons cannot be combined.
+                  </p>
+                ) : appliedCoupon ? (
+                  <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+                    <div>
+                      <span className="font-mono font-bold text-green-800">{appliedCoupon.code}</span>
+                      <span className="ml-2 text-sm text-green-700">
+                        {appliedCoupon.discountPercent}% off applied
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRemoveCoupon}
+                      className="text-sm text-red-600 hover:text-red-700 font-medium"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={couponInput}
+                        onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                        placeholder="Enter coupon code"
+                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg font-mono uppercase"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleApplyCoupon}
+                        disabled={couponChecking || !couponInput.trim()}
+                        className="px-5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                      >
+                        {couponChecking ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                        Apply
+                      </button>
+                    </div>
+                    {couponError && <p className="text-sm text-red-600 mt-2">{couponError}</p>}
+                  </div>
+                )}
+              </section>
+
               {/* Payment section */}
               <section className="bg-white border border-gray-200 rounded-xl p-5">
                 <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -964,6 +1089,18 @@ const getFoodPackages = useCallback(() => {
                   </div>
 
                   <div className="pt-3 border-t border-gray-200 space-y-2">
+                    {discountAmount > 0 && (
+                      <>
+                        <div className="flex justify-between text-sm">
+                          <span>Subtotal</span>
+                          <span>₹{subtotal.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-sm text-green-600">
+                          <span>Discount ({discountPercent}% · {appliedCoupon?.code})</span>
+                          <span>-₹{discountAmount.toLocaleString()}</span>
+                        </div>
+                      </>
+                    )}
                     <div className="flex justify-between">
                       <span>Total price</span>
                       <span className="font-bold text-blue-600">₹{totalPrice.toLocaleString()}</span>
