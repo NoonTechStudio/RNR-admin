@@ -18,6 +18,7 @@ import { AddLocation, GetLocations } from "./components/Locations";
 import { AddReview, GetReviews } from "./components/Reviews";
 import { AddImage, GetImages } from "./components/Memories";
 import { GetOffers, OfferForm } from "./components/Offers";
+import { GetCoupons, CouponForm } from "./components/Coupons";
 import HomepageHeroManagement from "./components/HomepageHeroManagement";
 import {CreateCaretaker, CaretakerBookings, CaretakerDashboard, CaretakerLogin, CaretakerProfile, CaretakerRegister, GetCaretakers } from './pages/Caretaker';
 import { TermList, TermsForm, TermsView } from './components/TermsAndConditions';
@@ -267,6 +268,31 @@ function App() {
               <ProtectedRoute>
                 <AdminLayout>
                   <OfferForm />
+                </AdminLayout>
+              </ProtectedRoute>
+            } />
+
+            {/* Coupons */}
+            <Route path="/admin/coupons" element={
+              <ProtectedRoute>
+                <AdminLayout>
+                  <GetCoupons />
+                </AdminLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/admin/coupons/create" element={
+              <ProtectedRoute>
+                <AdminLayout>
+                  <CouponForm />
+                </AdminLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/admin/coupons/edit/:couponId" element={
+              <ProtectedRoute>
+                <AdminLayout>
+                  <CouponForm />
                 </AdminLayout>
               </ProtectedRoute>
             } />

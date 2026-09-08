@@ -18,7 +18,8 @@ import {
   Waves,
   NotepadText,
   FileText,
-  Percent
+  Percent,
+  Tag
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import PLogo from "../../assets/Images/favicon.png";
@@ -53,6 +54,7 @@ const AdminLayout = ({ children }) => {
     { name: "Reviews", href: "/reviews", icon: Star },
     { name: "Memories", href: "/memories", icon: Images },
     { name: "Offers", href: "/admin/offers", icon: Percent },
+    { name: "Coupons", href: "/admin/coupons", icon: Tag },
     { name: "Caretakers", href: "/caretaker/all", icon: Hotel },
     { name: "Pool Parties", href: "/pool-parties", icon: Waves },
     { name: "Terms and Conditions", href: "/admin/terms", icon: FileText },
