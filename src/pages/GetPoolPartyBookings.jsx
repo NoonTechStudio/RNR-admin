@@ -83,9 +83,24 @@ const PaymentBreakdown = React.memo(({ booking }) => {
   const remainingAmount = booking.remainingAmount || 0;
   const totalAmount = amountPaid + remainingAmount;
   const isTokenPayment = booking.paymentType === 'token';
+  const discountAmount = booking.pricing?.discountAmount || 0;
+  const discountPercent = booking.pricing?.discountPercent || 0;
+  const couponCode = booking.pricing?.couponCode || '';
 
   return (
     <div className="text-xs space-y-1">
+      {discountAmount > 0 && (
+        <>
+          <div className="flex justify-between text-gray-500">
+            <span>Subtotal:</span>
+            <span>{formatCurrency(totalAmount + discountAmount)}</span>
+          </div>
+          <div className="flex justify-between text-green-600">
+            <span>Discount ({discountPercent}%{couponCode ? ` · ${couponCode}` : ''}):</span>
+            <span>-{formatCurrency(discountAmount)}</span>
+          </div>
+        </>
+      )}
       <div className="flex justify-between">
         <span className="text-gray-600">Total:</span>
         <span className="font-medium">{formatCurrency(totalAmount)}</span>

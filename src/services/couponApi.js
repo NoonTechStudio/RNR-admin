@@ -38,10 +38,11 @@ export const deleteCoupon = async (couponId) => {
 };
 
 // ---- Public (booking flow) ----
-export const validateCoupon = async ({ code, locationId, bookingDate, subtotal }) => {
+export const validateCoupon = async ({ code, locationId, poolPartyId, bookingDate, subtotal }) => {
   const res = await axios.post(`${API_URL}/validate`, {
     code,
     locationId,
+    poolPartyId,
     bookingDate,
     subtotal,
   });
