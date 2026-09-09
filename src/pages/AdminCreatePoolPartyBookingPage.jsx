@@ -4,8 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Calendar, User, Phone, Mail, Home, Clock, Utensils, CreditCard,
-  CheckCircle, AlertCircle, Users, Loader2, ChevronDown, ArrowLeft, Shield, Download
+  CheckCircle, AlertCircle, Users, Loader2, ChevronDown, ArrowLeft, Shield, Download, Tag
 } from 'lucide-react';
+import { validateCoupon } from '../services/couponApi';
 
 // ----------------------------------------------------------------------
 // Helper: get YYYY‑MM‑DD in local time (prevents timezone shift)
@@ -59,6 +60,12 @@ const AdminCreatePoolPartyBookingPage = () => {
   // Offer
   const [activeOffer, setActiveOffer] = useState(null);
   const [offerLoading, setOfferLoading] = useState(false);
+
+  // Discount coupon
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null); // { code, discountPercent }
+  const [couponError, setCouponError] = useState('');
+  const [couponChecking, setCouponChecking] = useState(false);
 
   // Payment
   const [paymentType, setPaymentType] = useState('token'); // 'full' or 'token'
@@ -135,9 +142,62 @@ const AdminCreatePoolPartyBookingPage = () => {
     return adultPrice + kidPrice + foodPrice;
   }, [poolPartyData, formData, getSessionPricing, foodPackages]);
 
-  const totalPrice = useMemo(() => calculateTotalPrice(), [calculateTotalPrice]);
+  // Subtotal = price before any coupon discount
+  const subtotal = useMemo(() => calculateTotalPrice(), [calculateTotalPrice]);
+  const discountPercent = appliedCoupon?.discountPercent || 0;
+  const discountAmount = useMemo(
+    () => (discountPercent > 0 ? Math.round((subtotal * discountPercent) / 100) : 0),
+    [subtotal, discountPercent]
+  );
+  const totalPrice = useMemo(() => Math.max(0, subtotal - discountAmount), [subtotal, discountAmount]);
   const tokenAmount = useMemo(() => totalPrice * 0.5, [totalPrice]);
   const remainingAmount = useMemo(() => totalPrice - (parseFloat(manualAmountPaid) || 0), [totalPrice, manualAmountPaid]);
+
+  // A coupon can never be combined with an active Offer
+  useEffect(() => {
+    if (activeOffer && appliedCoupon) {
+      setAppliedCoupon(null);
+      setCouponInput('');
+      setCouponError('A special offer is active for this date — coupons cannot be combined.');
+    }
+  }, [activeOffer, appliedCoupon]);
+
+  const handleApplyCoupon = async () => {
+    const code = couponInput.trim().toUpperCase();
+    if (!code) return;
+    if (activeOffer) {
+      setCouponError('A special offer is active for this date — coupons cannot be combined.');
+      return;
+    }
+    setCouponChecking(true);
+    setCouponError('');
+    try {
+      const res = await validateCoupon({
+        code,
+        poolPartyId: poolPartyData?._id,
+        bookingDate: formData.bookingDate,
+        subtotal,
+      });
+      if (res.success) {
+        setAppliedCoupon({ code: res.data.code, discountPercent: res.data.discountPercent });
+        setCouponInput(res.data.code);
+      } else {
+        setAppliedCoupon(null);
+        setCouponError(res.error || 'Invalid coupon');
+      }
+    } catch (err) {
+      setAppliedCoupon(null);
+      setCouponError(err.response?.data?.error || 'Invalid coupon');
+    } finally {
+      setCouponChecking(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponInput('');
+    setCouponError('');
+  };
 
   // Update manualAmountPaid when paymentType changes
   useEffect(() => {
@@ -362,6 +422,7 @@ const AdminCreatePoolPartyBookingPage = () => {
       paymentType: 'token', // Always token for initial booking? Admin can override via paymentType
       amountPaid: parseFloat(manualAmountPaid) || 0,
       remainingAmount: Math.max(0, totalPrice - (parseFloat(manualAmountPaid) || 0)),
+      couponCode: appliedCoupon?.code || '',
       withFood: formData.withFood,
       foodPackage: formData.withFood && selectedFoodPkg ? {
         foodPackageId: selectedFoodPkg.foodPackageId || selectedFoodPkg._id,
@@ -535,6 +596,9 @@ const AdminCreatePoolPartyBookingPage = () => {
     setBookingResult(null);
     setPaymentStep('booking');
     setRazorpayOrder(null);
+    setCouponInput('');
+    setAppliedCoupon(null);
+    setCouponError('');
   };
 
   // --------------------------------------------------------------------
@@ -569,6 +633,12 @@ const AdminCreatePoolPartyBookingPage = () => {
                     <span className="text-gray-600">Session:</span>
                     <span className="font-medium">{formData.session}</span>
                   </div>
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between text-green-600">
+                      <span>Discount ({discountPercent}% · {appliedCoupon?.code}):</span>
+                      <span>-₹{discountAmount.toLocaleString()}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-gray-600">Total Amount:</span>
                     <span className="font-medium">₹{totalPrice.toLocaleString()}</span>
@@ -671,6 +741,12 @@ const AdminCreatePoolPartyBookingPage = () => {
                     </div>
                   )}
                   <div className="pt-3 border-t border-gray-200">
+                    {discountAmount > 0 && (
+                      <div className="flex justify-between text-sm text-green-600">
+                        <span>Discount ({discountPercent}% · {appliedCoupon?.code})</span>
+                        <span>-₹{discountAmount.toLocaleString()}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span className="font-semibold">Total</span>
                       <span className="font-bold text-blue-600">₹{totalPrice.toLocaleString()}</span>
@@ -1047,6 +1123,58 @@ const AdminCreatePoolPartyBookingPage = () => {
                   </div>
                 </section>
 
+                {/* Discount coupon */}
+                {formData.session && (
+                  <section className="border border-gray-200 rounded-xl p-5">
+                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                      <Tag className="w-5 h-5 text-blue-600" /> Discount Coupon
+                    </h3>
+                    {activeOffer ? (
+                      <p className="text-sm text-gray-500">
+                        A special offer is active for this date — coupons cannot be combined.
+                      </p>
+                    ) : appliedCoupon ? (
+                      <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+                        <div>
+                          <span className="font-mono font-bold text-green-800">{appliedCoupon.code}</span>
+                          <span className="ml-2 text-sm text-green-700">
+                            {appliedCoupon.discountPercent}% off applied
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRemoveCoupon}
+                          className="text-sm text-red-600 hover:text-red-700 font-medium"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={couponInput}
+                            onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                            placeholder="Enter coupon code"
+                            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg font-mono uppercase"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleApplyCoupon}
+                            disabled={couponChecking || !couponInput.trim()}
+                            className="px-5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                          >
+                            {couponChecking ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                            Apply
+                          </button>
+                        </div>
+                        {couponError && <p className="text-sm text-red-600 mt-2">{couponError}</p>}
+                      </div>
+                    )}
+                  </section>
+                )}
+
                 {/* Payment section */}
                 <section className="border border-gray-200 rounded-xl p-5">
                   <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -1090,6 +1218,18 @@ const AdminCreatePoolPartyBookingPage = () => {
 
                     {totalPrice > 0 && (
                       <div className="bg-blue-50 p-4 rounded-lg">
+                        {discountAmount > 0 && (
+                          <>
+                            <div className="flex justify-between text-sm">
+                              <span>Subtotal</span>
+                              <span>₹{subtotal.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-sm text-green-600">
+                              <span>Discount ({discountPercent}% · {appliedCoupon?.code})</span>
+                              <span>-₹{discountAmount.toLocaleString()}</span>
+                            </div>
+                          </>
+                        )}
                         <div className="flex justify-between text-sm">
                           <span>Total price (based on current selections)</span>
                           <span className="font-bold text-blue-600">₹{totalPrice.toLocaleString()}</span>
