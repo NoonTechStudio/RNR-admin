@@ -4,10 +4,11 @@ import {
   Search, Filter, Edit, Calendar, User, Phone, MapPin, 
   IndianRupee, Users, Utensils, CheckCircle, XCircle, Clock,
   MoreVertical, CreditCard, Trash2, RefreshCw, Plus,
-  Wallet, AlertCircle, Mail, ChevronLeft, ChevronRight
+  Wallet, AlertCircle, Mail, ChevronLeft, ChevronRight, CalendarX2
 } from 'lucide-react';
 import { paymentAPI } from '../../services/paymentApi';
 import AdminPaymentModal from './AdminPaymentModal';
+import CancelBookingModal from './CancelBookingModal';
 import LoadingSpinner from '../ui/LoadingSpinner';
 import Toast from '../ui/Toast';
 
@@ -39,7 +40,8 @@ const getStatusBadge = (status) => {
     pending: { color: 'bg-yellow-100 text-yellow-800', icon: Clock },
     paid: { color: 'bg-green-100 text-green-800', icon: CheckCircle },
     failed: { color: 'bg-red-100 text-red-800', icon: XCircle },
-    partially_paid: { color: 'bg-orange-100 text-orange-800', icon: AlertCircle }
+    partially_paid: { color: 'bg-orange-100 text-orange-800', icon: AlertCircle },
+    cancelled: { color: 'bg-gray-200 text-gray-700', icon: XCircle }
   };
   const config = statusConfig[status] || statusConfig.pending;
   const Icon = config.icon;
@@ -86,9 +88,19 @@ const PaymentBreakdown = React.memo(({ booking }) => {
   const discountAmount = booking.pricing?.discountAmount || 0;
   const discountPercent = booking.pricing?.discountPercent || 0;
   const couponCode = booking.pricing?.couponCode || '';
+  const cancellation = booking.paymentStatus === 'cancelled' ? booking.cancellation : null;
 
   return (
     <div className="text-xs space-y-1">
+      {cancellation && (
+        <div className="mb-1 px-2 py-1 bg-gray-100 border border-gray-200 rounded text-gray-700">
+          <div className="font-semibold">Cancelled · {cancellation.refundPercent ?? 0}% refund</div>
+          <div>Refund: {formatCurrency(cancellation.refundAmount)}</div>
+          {cancellation.manualRefundDue > 0 && (
+            <div className="text-orange-700 font-medium">Refund manually: {formatCurrency(cancellation.manualRefundDue)}</div>
+          )}
+        </div>
+      )}
       {discountAmount > 0 && (
         <>
           <div className="flex justify-between text-gray-500">
@@ -180,6 +192,7 @@ const GetBookings = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmConfig, setConfirmConfig] = useState({ message: '', onConfirm: null, booking: null });
+  const [cancelTarget, setCancelTarget] = useState(null);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -573,6 +586,22 @@ const GetBookings = () => {
       )}
 
       {/* Payment Modal */}
+      {cancelTarget && (
+        <CancelBookingModal
+          booking={cancelTarget}
+          onClose={() => setCancelTarget(null)}
+          onCancelled={(data) => {
+            showToast(
+              data?.refund?.manualRefundDue > 0
+                ? 'Booking cancelled — remember to refund the remaining amount manually'
+                : 'Booking cancelled successfully',
+              'success'
+            );
+            fetchBookings(currentPage);
+          }}
+        />
+      )}
+
       <AdminPaymentModal
         isOpen={showPaymentModal}
         onClose={() => setShowPaymentModal(false)}
@@ -719,6 +748,7 @@ const GetBookings = () => {
                 <option value="paid">Paid</option>
                 <option value="partially_paid">Partial Paid</option>
                 <option value="failed">Failed</option>
+                <option value="cancelled">Cancelled</option>
               </select>
             </div>
           </div>
@@ -897,13 +927,15 @@ const GetBookings = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex items-center space-x-2">
-                        <Link
-                          to={`/bookings/edit/${booking._id}`}
-                          className="inline-flex items-center px-3 py-1 border border-gray-300 text-xs font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-colors"
-                        >
-                          <Edit className="w-3 h-3 mr-1" />
-                          Edit
-                        </Link>
+                        {booking.paymentStatus !== 'cancelled' && (
+                          <Link
+                            to={`/bookings/edit/${booking._id}`}
+                            className="inline-flex items-center px-3 py-1 border border-gray-300 text-xs font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+                          >
+                            <Edit className="w-3 h-3 mr-1" />
+                            Edit
+                          </Link>
+                        )}
                         
                         {booking.paymentStatus === 'pending' && booking.pricing?.totalPrice > 0 && (
                           <button
@@ -932,7 +964,7 @@ const GetBookings = () => {
 
                           {actionLoading === booking._id && (
                             <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
-                              {booking.paymentStatus !== 'paid' && (
+                              {booking.paymentStatus !== 'paid' && booking.paymentStatus !== 'cancelled' && (
                                 <button
                                   onClick={() => handleMarkAsPaid(booking)}
                                   disabled={!isAuthenticated}
@@ -954,6 +986,19 @@ const GetBookings = () => {
                                 >
                                   <AlertCircle className="w-4 h-4 mr-2" />
                                   Mark as Partial Paid
+                                </button>
+                              )}
+
+                              {booking.paymentStatus !== 'cancelled' && (
+                                <button
+                                  onClick={() => {
+                                    setActionLoading(null);
+                                    setCancelTarget(booking);
+                                  }}
+                                  className="flex items-center px-4 py-2 text-sm text-orange-700 hover:bg-gray-100 w-full text-left"
+                                >
+                                  <CalendarX2 className="w-4 h-4 mr-2" />
+                                  Cancel &amp; Refund
                                 </button>
                               )}
 
