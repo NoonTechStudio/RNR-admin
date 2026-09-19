@@ -4,7 +4,8 @@ import toast, { Toaster } from "react-hot-toast";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { createCoupon, updateCoupon, getCouponById } from "../../services/couponApi";
 
-const PRESET_PERCENTS = [10, 20, 25];
+// Quick-pick shortcuts – any custom percentage can also be typed in below
+const PRESET_PERCENTS = [5, 10, 20, 25];
 
 export default function CouponForm() {
   const navigate = useNavigate();
@@ -47,14 +48,14 @@ export default function CouponForm() {
     const pct = Number(form.discountPercent);
 
     if (!code) return toast.error("Coupon code is required");
-    if (Number.isNaN(pct) || pct < 1 || pct > 100)
-      return toast.error("Discount must be between 1 and 100");
+    if (Number.isNaN(pct) || pct <= 0 || pct > 100)
+      return toast.error("Discount must be greater than 0 and at most 100");
 
     setSubmitting(true);
     try {
       const payload = {
         code,
-        discountPercent: pct,
+        discountPercent: Math.round(pct * 100) / 100,
         description: form.description.trim(),
         isActive: form.isActive,
       };
@@ -115,7 +116,10 @@ export default function CouponForm() {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Discount Percentage *</label>
-          <div className="flex gap-2 mb-2">
+          <p className="text-xs text-gray-500 mb-2">
+            Tap a quick option, or type any custom percentage in the box below (e.g. 7.5).
+          </p>
+          <div className="flex flex-wrap gap-2 mb-3">
             {PRESET_PERCENTS.map((p) => (
               <button
                 key={p}
@@ -131,15 +135,26 @@ export default function CouponForm() {
               </button>
             ))}
           </div>
-          <input
-            type="number"
-            min="1"
-            max="100"
-            value={form.discountPercent}
-            onChange={(e) => setForm({ ...form, discountPercent: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-            required
-          />
+          <div className="relative">
+            <input
+              type="number"
+              min="0.01"
+              max="100"
+              step="any"
+              inputMode="decimal"
+              value={form.discountPercent}
+              onChange={(e) => setForm({ ...form, discountPercent: e.target.value })}
+              placeholder="Custom percentage, e.g. 7.5"
+              className="w-full pl-4 pr-10 py-2 border border-gray-300 rounded-lg"
+              required
+            />
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">%</span>
+          </div>
+          {Number(form.discountPercent) > 0 && Number(form.discountPercent) <= 100 && (
+            <p className="text-xs text-green-700 mt-1">
+              Customers will get {Number(form.discountPercent)}% off the booking total.
+            </p>
+          )}
         </div>
 
         <div>

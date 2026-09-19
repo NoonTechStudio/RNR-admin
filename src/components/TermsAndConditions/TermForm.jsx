@@ -216,7 +216,7 @@ const TermsForm = () => {
     resort: `1. Charges for Children: Children aged between 5 and 8 years will be charged at half rate.
 2. Charges for Adults: Individuals above 8 years will be charged at the full rate.
 3. Advance Payment: Entry to the resort is permitted only after the advance payment is cleared.
-4. Cancellation Policy: No refunds will be issued for canceled bookings.
+4. Booking Cancellation & Refund Policy: Refund is calculated on the amount paid: 100% refund if cancelled 7 days or more before check-in, 50% refund between 3 and 7 days before check-in, 25% refund between 48 hours and 3 days before check-in, and no refund within 48 hours of check-in.
 5. Personal Responsibility: Participation in activities and use of the swimming pool is at the individual's own risk. The resort is not liable for any injuries or accidents.
 6. Prohibited Activities: Alcohol consumption and illegal activities are strictly prohibited within the resort.
 7. Swimming Pool Guidelines: Individuals with skin problems or allergies should refrain from using the swimming pool.
@@ -238,7 +238,7 @@ const TermsForm = () => {
 23. Handling Issues: Guests should address any concerns calmly with on-site staff. Aggressive behavior will not be tolerated.`,
     
     basic: `1. Booking Confirmation: All bookings are confirmed only after full payment is received.
-2. Cancellation: No refunds for cancellations made less than 48 hours before check-in.
+2. Booking Cancellation & Refund Policy: Refund is calculated on the amount paid: 100% refund if cancelled 7 days or more before check-in, 50% refund between 3 and 7 days before check-in, 25% refund between 48 hours and 3 days before check-in, and no refund within 48 hours of check-in.
 3. Check-in/Check-out: Check-in at 2:00 PM, Check-out at 11:00 AM.
 4. Guest Responsibility: Guests are responsible for any damage to property.
 5. Smoking: Smoking is prohibited in all indoor areas.

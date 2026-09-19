@@ -17,4 +17,8 @@ export const bookingAPI = {
   
   // Get booked dates for a location
   getBookedDates: (locationId) => api.get(`/bookings/dates/${locationId}`),
+
+  // Cancellation & refund (location bookings)
+  getCancellationPreview: (id) => api.get(`/bookings/${id}/cancellation-preview`),
+  cancelBooking: (id, payload) => api.post(`/bookings/${id}/cancel`, payload),
 };
